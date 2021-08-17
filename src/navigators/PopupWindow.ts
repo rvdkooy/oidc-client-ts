@@ -62,9 +62,35 @@ export class PopupWindow implements IWindow {
             this._popup.window.location = params.url;
         }
 
+        window.addEventListener("message", this._messageReceived, false);
+
         return this.promise;
     }
+    _messageReceived(event: MessageEvent) {
+        if (event.origin !== window.location.origin) {
+            Log.warn('PopupWindow:messageRecieved: Message not coming from same origin: ' + event.origin);
+            return;
+        };
 
+        let { data, url, keepOpen } = JSON.parse(event.data);
+
+        if (data.state) {
+            const name = "popupCallback_" + data.state;
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            const callback = window[name];
+            if (callback) {
+                Log.debug("PopupWindow.notifyOpener: passing url message to opener");
+                callback(url, keepOpen);
+            }
+            else {
+                Log.warn("PopupWindow.notifyOpener: no matching callback found on opener");
+            }
+        }
+        else {
+            Log.warn("PopupWindow.notifyOpener: no state found in response url");
+        }
+    }
     _success(data: any) {
         Log.debug("PopupWindow.callback: Successful response from popup window");
 
@@ -101,6 +127,10 @@ export class PopupWindow implements IWindow {
     }
 
     _checkForPopupClosed() {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+        if (window.crossOriginIsolated) return;
         if (!this._popup || this._popup.closed) {
             this._error("Popup window closed");
         }
@@ -120,31 +150,16 @@ export class PopupWindow implements IWindow {
     }
 
     static notifyOpener(url: string | undefined, keepOpen: boolean, delimiter: string) {
-        if (window.opener) {
-            url = url || window.location.href;
-            if (url) {
-                const data = UrlUtility.parseUrlFragment(url, delimiter);
+        url = url || window.location.href;
 
-                if (data.state) {
-                    const name = "popupCallback_" + data.state;
-                    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                    // @ts-ignore
-                    const callback = window.opener[name];
-                    if (callback) {
-                        Log.debug("PopupWindow.notifyOpener: passing url message to opener");
-                        callback(url, keepOpen);
-                    }
-                    else {
-                        Log.warn("PopupWindow.notifyOpener: no matching callback found on opener");
-                    }
-                }
-                else {
-                    Log.warn("PopupWindow.notifyOpener: no state found in response url");
-                }
-            }
-        }
-        else {
-            Log.warn("PopupWindow.notifyOpener: no window.opener. Can't complete notification.");
+        if (url) {
+            const data = UrlUtility.parseUrlFragment(url, delimiter);
+
+            window.opener?.postMessage(JSON.stringify({
+                data,
+                url,
+                keepOpen,
+            }), window.location.origin);
         }
     }
 }
