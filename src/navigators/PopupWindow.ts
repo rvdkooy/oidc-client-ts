@@ -60,19 +60,23 @@ export class PopupWindow implements IWindow {
 
             this._popup.focus();
             this._popup.window.location = params.url;
-        }
 
-        window.addEventListener("message", this._messageReceived, false);
+            setInterval(() => {
+                // We loose reference to the child window when COOP & COEP is enabled
+                console.log(this._popup);
+
+                // @ts-ignore
+                if (this._popup?.closePopupNofifierVariable) {
+                    // @ts-ignore
+                    this._messageReceived(this._popup?.closePopupNofifierVariable);
+                }
+            }, 500);
+        }
 
         return this.promise;
     }
-    _messageReceived(event: MessageEvent) {
-        if (event.origin !== window.location.origin) {
-            Log.warn('PopupWindow:messageRecieved: Message not coming from same origin: ' + event.origin);
-            return;
-        };
-
-        let { data, url, keepOpen } = JSON.parse(event.data);
+    _messageReceived(closePopupNofifierVariable: string) {
+        let { data, url, keepOpen } = JSON.parse(closePopupNofifierVariable);
 
         if (data.state) {
             const name = "popupCallback_" + data.state;
@@ -154,12 +158,14 @@ export class PopupWindow implements IWindow {
 
         if (url) {
             const data = UrlUtility.parseUrlFragment(url, delimiter);
-
-            window.opener?.postMessage(JSON.stringify({
+             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+            window.closePopupNofifierVariable = JSON.stringify({
                 data,
                 url,
                 keepOpen,
-            }), window.location.origin);
+            });
         }
     }
 }
